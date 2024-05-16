@@ -1,11 +1,28 @@
-Let's update the JSON Schema and the Java program to meet the new requirements:
+To use the `networknt/json-schema-validator` library for validating JSON against a JSON Schema with conditional requirements in Java, you can follow these steps:
 
-1. The `decision` field must be a string and can only be "Accepted" or "Rejected".
-2. If `decision` is "Rejected", then both `rejectionCode` and `additionalComments` fields must be present and be strings.
-3. If `decision` is "Accepted", then `rejectionCode` and `additionalComments` should not be required and can be absent.
+### Step 1: Add the required dependencies
 
-### JSON Schema (schema.json)
+First, add the `networknt/json-schema-validator` dependency to your project. If you are using Maven, add the following dependency to your `pom.xml` file:
 
+```xml
+<dependency>
+    <groupId>com.networknt</groupId>
+    <artifactId>json-schema-validator</artifactId>
+    <version>1.0.76</version> <!-- Check for the latest version -->
+</dependency>
+```
+
+If you are using Gradle, add the following line to your `build.gradle` file:
+
+```gradle
+implementation 'com.networknt:json-schema-validator:1.0.76'
+```
+
+### Step 2: Create the JSON Schema
+
+Create a JSON Schema file `schema.json` with the required conditional logic.
+
+**schema.json:**
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
@@ -34,16 +51,18 @@ Let's update the JSON Schema and the Java program to meet the new requirements:
 }
 ```
 
-### JSON Data Examples
+### Step 3: Create JSON Data Examples
 
-**Valid JSON when decision is "Accepted":**
+Create JSON data files to be validated against the schema.
+
+**dataAccepted.json:**
 ```json
 {
   "decision": "Accepted"
 }
 ```
 
-**Valid JSON when decision is "Rejected":**
+**dataRejected.json:**
 ```json
 {
   "decision": "Rejected",
@@ -52,22 +71,29 @@ Let's update the JSON Schema and the Java program to meet the new requirements:
 }
 ```
 
-**Invalid JSON when decision is "Rejected" but missing required fields:**
+**dataInvalidRejected.json:**
 ```json
 {
   "decision": "Rejected"
 }
 ```
 
-### Java Code for Validation (JsonSchemaValidator.java)
+### Step 4: Write the Java Code for Validation
+
+Create a Java class to perform the validation using the `networknt/json-schema-validator` library.
+
+**JsonSchemaValidator.java:**
 
 ```java
-import org.everit.json.schema.Schema;
-import org.everit.json.schema.loader.SchemaLoader;
-import org.json.JSONObject;
-import org.json.JSONTokener;
+import com.networknt.schema.JsonSchema;
+import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.ValidationMessage;
+import com.networknt.schema.SpecVersion;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.InputStream;
+import java.util.Set;
 
 public class JsonSchemaValidator {
 
@@ -81,16 +107,21 @@ public class JsonSchemaValidator {
         try {
             // Load the JSON schema
             InputStream schemaStream = JsonSchemaValidator.class.getResourceAsStream("/schema.json");
-            JSONObject rawSchema = new JSONObject(new JSONTokener(schemaStream));
-            Schema schema = SchemaLoader.load(rawSchema);
+            JsonSchemaFactory schemaFactory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7);
+            JsonSchema schema = schemaFactory.getSchema(schemaStream);
 
             // Load the JSON document
             InputStream jsonStream = JsonSchemaValidator.class.getResourceAsStream(jsonFilePath);
-            JSONObject jsonObject = new JSONObject(new JSONTokener(jsonStream));
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode jsonNode = mapper.readTree(jsonStream);
 
             // Validate the JSON document against the schema
-            schema.validate(jsonObject);
-            System.out.println(jsonFilePath + ": JSON is valid against the schema.");
+            Set<ValidationMessage> validationMessages = schema.validate(jsonNode);
+            if (validationMessages.isEmpty()) {
+                System.out.println(jsonFilePath + ": JSON is valid against the schema.");
+            } else {
+                System.out.println(jsonFilePath + ": JSON is not valid. Errors: " + validationMessages);
+            }
         } catch (Exception e) {
             System.out.println(jsonFilePath + ": JSON is not valid. Error: " + e.getMessage());
         }
@@ -141,4 +172,4 @@ public class JsonSchemaValidator {
 
 3. Compile and run the `JsonSchemaValidator` class. The program will validate the JSON documents against the schema and print the results.
 
-By following these steps, you can validate JSON documents with conditional requirements using Java and the `everit-org/json-schema` library.
+By following these steps, you can validate JSON documents with conditional requirements using Java and the `networknt/json-schema-validator` library.
