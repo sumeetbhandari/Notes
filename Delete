@@ -1,0 +1,63 @@
+package com.example.project.test;
+
+import com.networknt.schema.JsonSchema;
+import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.ValidationMessage;
+import com.networknt.schema.SpecVersion;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+import java.io.InputStream;
+import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
+public class JsonSchemaValidatorTest {
+
+    private static JsonSchema schema;
+    private static ObjectMapper mapper;
+
+    @BeforeAll
+    public static void setup() throws Exception {
+        // Load the JSON schema
+        InputStream schemaStream = JsonSchemaValidatorTest.class.getResourceAsStream("/schema.json");
+        JsonSchemaFactory schemaFactory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7);
+        schema = schemaFactory.getSchema(schemaStream);
+
+        // Initialize ObjectMapper
+        mapper = new ObjectMapper();
+    }
+
+    private boolean validateJson(String jsonFilePath) {
+        try {
+            // Load the JSON document
+            InputStream jsonStream = JsonSchemaValidatorTest.class.getResourceAsStream(jsonFilePath);
+            JsonNode jsonNode = mapper.readTree(jsonStream);
+
+            // Validate the JSON document against the schema
+            Set<ValidationMessage> validationMessages = schema.validate(jsonNode);
+            return validationMessages.isEmpty();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    @Test
+    public void testValidAccepted() {
+        assertTrue(validateJson("/dataAccepted.json"), "Valid Accepted JSON should pass validation");
+    }
+
+    @Test
+    public void testValidRejected() {
+        assertTrue(validateJson("/dataRejected.json"), "Valid Rejected JSON should pass validation");
+    }
+
+    @Test
+    public void testInvalidRejected() {
+        assertFalse(validateJson("/dataInvalidRejected.json"), "Invalid Rejected JSON should fail validation");
+    }
+}
