@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": ["Accepted", "Rejected"],
+      "errorMessage": {
+        "enum": "decision must be 'Accepted' or 'Rejected'"
+      }
+    },
+    "rejectionCode": {
+      "type": "string",
+      "errorMessage": {
+        "type": "rejectionCode must be a string"
+      }
+    },
+    "additionalComments": {
+      "type": "string",
+      "errorMessage": {
+        "type": "additionalComments must be a string"
+      }
+    }
+  },
+  "required": ["decision"],
+  "if": {
+    "properties": { "decision": { "const": "Rejected" } }
+  },
+  "then": {
+    "required": ["rejectionCode", "additionalComments"],
+    "errorMessage": {
+      "required": "When decision is 'Rejected', rejectionCode and additionalComments are required"
+    }
+  },
+  "else": {
+    "not": {
+      "required": ["rejectionCode", "additionalComments"]
+    }
+  }
+}
