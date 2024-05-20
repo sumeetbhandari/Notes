@@ -1,178 +1,101 @@
-To achieve custom error messages natively supported by a JSON schema validation library, you might want to use the `Everit` JSON schema library. This library allows you to embed custom messages directly in your JSON schema, and then process these messages easily in your Java code. Here’s how you can set this up:
+Here's the utility class for JSON schema validation using the `networknt/json-schema-validator` library. This class will load the schema, validate JSON data against it, and print out detailed error messages if the validation fails.
 
-### 1. JSON Schema with Custom Messages
-
-Define your schema with custom messages using the `errorMessage` keyword:
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
-  "properties": {
-    "decision": {
-      "type": "string",
-      "enum": ["Accepted", "Rejected"],
-      "errorMessage": {
-        "enum": "The decision field must be either 'Accepted' or 'Rejected'."
-      }
-    },
-    "rejectionCode": {
-      "type": "string",
-      "errorMessage": {
-        "type": "The rejection code must be a string."
-      }
-    },
-    "additionalComments": {
-      "type": "string",
-      "errorMessage": {
-        "type": "The additional comments must be a string."
-      }
-    }
-  },
-  "required": ["decision"],
-  "if": {
-    "properties": { "decision": { "const": "Rejected" } }
-  },
-  "then": {
-    "required": ["rejectionCode", "additionalComments"],
-    "errorMessage": {
-      "required": "When decision is 'Rejected', rejectionCode and additionalComments are required."
-    }
-  },
-  "else": {
-    "not": {
-      "required": ["rejectionCode", "additionalComments"]
-    }
-  }
-}
-```
-
-### 2. Maven Dependency
-
-First, add the `everit-json-schema` dependency to your `pom.xml`:
-
-```xml
-<dependency>
-    <groupId>org.everit.json</groupId>
-    <artifactId>org.everit.json.schema</artifactId>
-    <version>1.14.0</version> <!-- Use the latest version -->
-</dependency>
-```
-
-### 3. Java Test Class
-
-Create a Java test class to validate JSON instances against the schema and handle custom error messages:
+### JSONSchemaValidatorUtility.java
 
 ```java
-package com.example.project.test;
+package com.example.jsonvalidator;
 
-import org.everit.json.schema.Schema;
-import org.everit.json.schema.loader.SchemaLoader;
-import org.json.JSONObject;
-import org.json.JSONTokener;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.everit.json.schema.ValidationException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.networknt.schema.JsonSchema;
+import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.SpecVersion;
+import com.networknt.schema.ValidationMessage;
 
 import java.io.InputStream;
-import java.util.List;
+import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
+public class JSONSchemaValidatorUtility {
 
-public class JsonSchemaValidatorTest {
+    private static final ObjectMapper mapper = new ObjectMapper();
 
-    private static Schema schema;
-
-    @BeforeAll
-    public static void setup() throws Exception {
-        // Load the JSON schema
-        InputStream schemaStream = JsonSchemaValidatorTest.class.getResourceAsStream("/schema.json");
-        JSONObject rawSchema = new JSONObject(new JSONTokener(schemaStream));
-        schema = SchemaLoader.load(rawSchema);
+    public static JsonSchema getSchema(String schemaPath) throws Exception {
+        InputStream schemaStream = JSONSchemaValidatorUtility.class.getResourceAsStream(schemaPath);
+        JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7);
+        return factory.getSchema(schemaStream);
     }
 
-    private void validateJson(String jsonFilePath) {
-        try {
-            InputStream jsonStream = JsonSchemaValidatorTest.class.getResourceAsStream(jsonFilePath);
-            JSONObject json = new JSONObject(new JSONTokener(jsonStream));
-            schema.validate(json);
-        } catch (ValidationException e) {
-            printValidationMessages(e);
-            fail("JSON validation failed: " + e.getMessage());
-        }
+    public static JsonNode getJsonNode(String jsonPath) throws Exception {
+        InputStream jsonStream = JSONSchemaValidatorUtility.class.getResourceAsStream(jsonPath);
+        return mapper.readTree(jsonStream);
     }
 
-    private void printValidationMessages(ValidationException e) {
-        List<ValidationException> causes = e.getCausingExceptions();
-        if (causes.isEmpty()) {
-            System.out.println(e.getMessage());
+    public static Set<ValidationMessage> validateJson(JsonSchema schema, JsonNode jsonNode) {
+        return schema.validate(jsonNode);
+    }
+
+    public static void printValidationMessages(Set<ValidationMessage> validationMessages) {
+        if (validationMessages.isEmpty()) {
+            System.out.println("Validation passed: No errors found.");
         } else {
-            for (ValidationException cause : causes) {
-                System.out.println(cause.getMessage());
-            }
+            System.out.println("Validation failed with the following errors:");
+            validationMessages.forEach(error -> System.out.println("Validation error: " + error.getMessage()));
         }
     }
 
-    @Test
-    public void testValidAccepted() {
-        validateJson("/dataAccepted.json");
-    }
+    public static void main(String[] args) throws Exception {
+        JsonSchema schema = getSchema("/schema.json");
 
-    @Test
-    public void testValidRejected() {
-        validateJson("/dataRejected.json");
-    }
+        JsonNode validAcceptedJson = getJsonNode("/validAcceptedDecision.json");
+        Set<ValidationMessage> errors = validateJson(schema, validAcceptedJson);
+        printValidationMessages(errors);
 
-    @Test
-    public void testInvalidRejected() {
-        try {
-            validateJson("/dataInvalidRejected.json");
-        } catch (AssertionError e) {
-            // Expected validation failure, do nothing
-        }
+        JsonNode validRejectedJson = getJsonNode("/validRejectedDecision.json");
+        errors = validateJson(schema, validRejectedJson);
+        printValidationMessages(errors);
+
+        JsonNode invalidAcceptedJson = getJsonNode("/invalidAcceptedDecision.json");
+        errors = validateJson(schema, invalidAcceptedJson);
+        printValidationMessages(errors);
+
+        JsonNode invalidRejectedJson = getJsonNode("/invalidRejectedDecision.json");
+        errors = validateJson(schema, invalidRejectedJson);
+        printValidationMessages(errors);
     }
 }
 ```
 
-### Running the Tests
+### Explanation
 
-1. **Navigate to the project directory**:
-    ```sh
-    cd /path/to/your/project
-    ```
+1. **Package Declaration**: The utility class is placed in the `com.example.jsonvalidator` package. Adjust the package name as needed for your project structure.
+2. **ObjectMapper Instance**: A static instance of `ObjectMapper` is used to read JSON data.
+3. **getSchema Method**: This method loads the JSON schema from a file path.
+4. **getJsonNode Method**: This method reads JSON data from a file path and converts it into a `JsonNode`.
+5. **validateJson Method**: This method validates the JSON data against the provided schema and returns the validation messages.
+6. **printValidationMessages Method**: This method prints the validation messages. It indicates whether validation passed or failed and lists the errors if there are any.
+7. **main Method**: The main method demonstrates how to use the utility class to validate different JSON files against the schema and print the validation messages.
 
-2. **Run the tests**:
-    ```sh
-    mvn test
-    ```
+### Running the Utility
 
-### Expected Output
+1. **Directory Structure**:
+   - Ensure your project follows a standard Maven directory structure:
+     ```
+     src
+     └── main
+         ├── java
+         │   └── com
+         │       └── example
+         │           └── jsonvalidator
+         │               └── JSONSchemaValidatorUtility.java
+         └── resources
+             ├── schema.json
+             ├── validAcceptedDecision.json
+             ├── validRejectedDecision.json
+             ├── invalidAcceptedDecision.json
+             └── invalidRejectedDecision.json
+     ```
 
-When running the tests, the output should include the custom error messages defined in your schema:
+2. **Running the Main Method**:
+   - You can run the `main` method of `JSONSchemaValidatorUtility` from your IDE or using the `java` command in the terminal after building the project. This will validate the JSON files against the schema and print the validation results.
 
-```sh
-[INFO] Running com.example.project.test.JsonSchemaValidatorTest
-The decision field must be either 'Accepted' or 'Rejected'.
-When decision is 'Rejected', rejectionCode and additionalComments are required.
-Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.123 s - in com.example.project.test.JsonSchemaValidatorTest
-
-Results:
-
-Tests run: 3, Failures: 0, Errors: 0, Skipped: 0
-
-[INFO] ------------------------------------------------------------------------
-[INFO] BUILD SUCCESS
-[INFO] ------------------------------------------------------------------------
-[INFO] Total time:  2.345 s
-[INFO] Finished at: 2024-05-15T15:35:19+00:00
-[INFO] ------------------------------------------------------------------------
-```
-
-### Summary
-
-- **Schema**: Defines custom error messages.
-- **Java Test Class**: Validates JSON files and prints custom validation messages.
-- **Output**: Provides clear and specific custom validation error messages.
-
-This approach leverages the `Everit` JSON schema validator to directly handle custom error messages, streamlining the validation process and ensuring more informative feedback.
+This utility class, combined with the test cases provided earlier, offers a comprehensive approach to validating JSON data against a schema with detailed custom error messages.
