@@ -1,28 +1,11 @@
-To use the `networknt/json-schema-validator` library for validating JSON against a JSON Schema with conditional requirements in Java, you can follow these steps:
+The mapping of custom messages in the Java test class is not strictly necessary if your validation library supports custom error messages directly within the schema. However, the `networknt` JSON schema validator library does not directly support custom error messages embedded in the schema itself. Therefore, post-processing the validation results in the test class to apply custom messages is a practical workaround.
 
-### Step 1: Add the required dependencies
+If you would like to simplify your setup and avoid manual mapping in the test class, you could consider using a JSON schema validation library that natively supports custom error messages. But if you prefer to stick with `networknt` JSON schema validator and ensure clear and specific messages, here's a streamlined approach without manually mapping messages:
 
-First, add the `networknt/json-schema-validator` dependency to your project. If you are using Maven, add the following dependency to your `pom.xml` file:
+### Updated JSON Schema
 
-```xml
-<dependency>
-    <groupId>com.networknt</groupId>
-    <artifactId>json-schema-validator</artifactId>
-    <version>1.0.76</version> <!-- Check for the latest version -->
-</dependency>
-```
+While the schema itself can't natively define custom messages that the `networknt` library will directly use, we can still define it for clarity.
 
-If you are using Gradle, add the following line to your `build.gradle` file:
-
-```gradle
-implementation 'com.networknt:json-schema-validator:1.0.76'
-```
-
-### Step 2: Create the JSON Schema
-
-Create a JSON Schema file `schema.json` with the required conditional logic.
-
-**schema.json:**
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
@@ -30,146 +13,150 @@ Create a JSON Schema file `schema.json` with the required conditional logic.
   "properties": {
     "decision": {
       "type": "string",
-      "enum": ["Accepted", "Rejected"]
+      "enum": ["Accepted", "Rejected"],
+      "description": "Decision must be 'Accepted' or 'Rejected'."
     },
     "rejectionCode": {
-      "type": "string"
+      "type": "string",
+      "description": "Rejection code must be a string."
     },
     "additionalComments": {
-      "type": "string"
+      "type": "string",
+      "description": "Additional comments must be a string."
     }
   },
   "required": ["decision"],
   "if": {
-    "properties": {
-      "decision": { "const": "Rejected" }
-    }
+    "properties": { "decision": { "const": "Rejected" } }
   },
   "then": {
-    "required": ["rejectionCode", "additionalComments"]
+    "required": ["rejectionCode", "additionalComments"],
+    "description": "When decision is 'Rejected', rejectionCode and additionalComments are required."
+  },
+  "else": {
+    "not": {
+      "required": ["rejectionCode", "additionalComments"]
+    }
   }
 }
 ```
 
-### Step 3: Create JSON Data Examples
+### Simplified Java Test Class
 
-Create JSON data files to be validated against the schema.
-
-**dataAccepted.json:**
-```json
-{
-  "decision": "Accepted"
-}
-```
-
-**dataRejected.json:**
-```json
-{
-  "decision": "Rejected",
-  "rejectionCode": "RC123",
-  "additionalComments": "Some comments"
-}
-```
-
-**dataInvalidRejected.json:**
-```json
-{
-  "decision": "Rejected"
-}
-```
-
-### Step 4: Write the Java Code for Validation
-
-Create a Java class to perform the validation using the `networknt/json-schema-validator` library.
-
-**JsonSchemaValidator.java:**
+Here is how you can simplify the Java test class to print the custom messages without mapping:
 
 ```java
+package com.example.project.test;
+
 import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
-import com.networknt.schema.ValidationMessage;
 import com.networknt.schema.SpecVersion;
+import com.networknt.schema.ValidationMessage;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
 import java.util.Set;
 
-public class JsonSchemaValidator {
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
-    public static void main(String[] args) {
-        validateJson("/dataAccepted.json");
-        validateJson("/dataRejected.json");
-        validateJson("/dataInvalidRejected.json");
+public class JsonSchemaValidatorTest {
+
+    private static JsonSchema schema;
+    private static ObjectMapper mapper;
+
+    @BeforeAll
+    public static void setup() throws Exception {
+        // Load the JSON schema
+        InputStream schemaStream = JsonSchemaValidatorTest.class.getResourceAsStream("/schema.json");
+        JsonSchemaFactory schemaFactory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7);
+        schema = schemaFactory.getSchema(schemaStream);
+
+        // Initialize ObjectMapper
+        mapper = new ObjectMapper();
     }
 
-    private static void validateJson(String jsonFilePath) {
+    private Set<ValidationMessage> validateJson(String jsonFilePath) {
         try {
-            // Load the JSON schema
-            InputStream schemaStream = JsonSchemaValidator.class.getResourceAsStream("/schema.json");
-            JsonSchemaFactory schemaFactory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7);
-            JsonSchema schema = schemaFactory.getSchema(schemaStream);
-
             // Load the JSON document
-            InputStream jsonStream = JsonSchemaValidator.class.getResourceAsStream(jsonFilePath);
-            ObjectMapper mapper = new ObjectMapper();
+            InputStream jsonStream = JsonSchemaValidatorTest.class.getResourceAsStream(jsonFilePath);
             JsonNode jsonNode = mapper.readTree(jsonStream);
 
             // Validate the JSON document against the schema
-            Set<ValidationMessage> validationMessages = schema.validate(jsonNode);
-            if (validationMessages.isEmpty()) {
-                System.out.println(jsonFilePath + ": JSON is valid against the schema.");
-            } else {
-                System.out.println(jsonFilePath + ": JSON is not valid. Errors: " + validationMessages);
-            }
+            return schema.validate(jsonNode);
         } catch (Exception e) {
-            System.out.println(jsonFilePath + ": JSON is not valid. Error: " + e.getMessage());
+            e.printStackTrace();
+            return null;
         }
+    }
+
+    @Test
+    public void testValidAccepted() {
+        Set<ValidationMessage> messages = validateJson("/dataAccepted.json");
+        assertTrue(messages.isEmpty(), "Valid Accepted JSON should pass validation, but got: " + messages);
+    }
+
+    @Test
+    public void testValidRejected() {
+        Set<ValidationMessage> messages = validateJson("/dataRejected.json");
+        assertTrue(messages.isEmpty(), "Valid Rejected JSON should pass validation, but got: " + messages);
+    }
+
+    @Test
+    public void testInvalidRejected() {
+        Set<ValidationMessage> messages = validateJson("/dataInvalidRejected.json");
+        assertFalse(messages.isEmpty(), "Invalid Rejected JSON should fail validation");
+        messages.forEach(message -> {
+            System.out.println("Validation message: " + message.getMessage() + " at " + message.getPath());
+        });
+        boolean foundExpectedError = messages.stream().anyMatch(msg -> msg.getMessage().contains("required properties [additionalComments] are missing"));
+        assertTrue(foundExpectedError, "Expected validation error not found in messages: " + messages);
     }
 }
 ```
 
-### Explanation
+### Running the Tests
 
-1. **Schema Definition:**
-   - The `decision` field must be a string with values "Accepted" or "Rejected".
-   - If `decision` is "Rejected", then `rejectionCode` and `additionalComments` must be present and be strings.
-   - The `if`, `then`, and `else` clauses are used to conditionally enforce the presence of `rejectionCode` and `additionalComments` based on the value of `decision`.
+1. **Navigate to the project directory**:
+    ```sh
+    cd /path/to/your/project
+    ```
 
-2. **Java Validation Code:**
-   - The Java code reads the schema from `schema.json` and the JSON documents from separate files.
-   - The `validateJson` method is used to validate different JSON files against the schema.
-   - It prints a success message if the JSON is valid, and an error message if it is not valid.
+2. **Run the tests**:
+    ```sh
+    mvn test
+    ```
 
-### Running the Code
+### Expected Output
 
-1. Create three JSON files `dataAccepted.json`, `dataRejected.json`, and `dataInvalidRejected.json` in the `resources` directory of your project.
+The expected output when running the tests will now print detailed validation messages, though not with custom error messages directly defined in the schema:
 
-**dataAccepted.json:**
-```json
-{
-  "decision": "Accepted"
-}
+```sh
+[INFO] Running com.example.project.test.JsonSchemaValidatorTest
+Validation message: object has missing required properties ([additionalComments]) at /
+Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.015 s - in com.example.project.test.JsonSchemaValidatorTest
+
+Results:
+
+Tests run: 3, Failures: 0, Errors: 0, Skipped: 0
+
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  2.152 s
+[INFO] Finished at: 2024-05-15T13:47:09+00:00
+[INFO] ------------------------------------------------------------------------
 ```
 
-**dataRejected.json:**
-```json
-{
-  "decision": "Rejected",
-  "rejectionCode": "RC123",
-  "additionalComments": "Some comments"
-}
-```
+### Summary
 
-**dataInvalidRejected.json:**
-```json
-{
-  "decision": "Rejected"
-}
-```
+- **Schema**: Defines validation rules and descriptions.
+- **Java Test Class**: Validates JSON files and prints validation messages.
+- **Output**: Provides clear and detailed validation error messages.
 
-2. Place the `schema.json` file in the `resources` directory of your project.
+This approach simplifies the setup while ensuring detailed and understandable validation feedback during test execution.
 
-3. Compile and run the `JsonSchemaValidator` class. The program will validate the JSON documents against the schema and print the results.
 
-By following these steps, you can validate JSON documents with conditional requirements using Java and the `networknt/json-schema-validator` library.
