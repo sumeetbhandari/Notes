@@ -1,65 +1,80 @@
-package com.example.jsonvalidator;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion;
 import com.networknt.schema.ValidationMessage;
+import org.junit.jupiter.api.Test;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.InputStream;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class JSONSchemaValidatorUtility {
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
-    private static final ObjectMapper mapper = new ObjectMapper();
+public class JsonSchemaValidatorTest {
 
-    public static JsonSchema getSchema(String schemaPath) throws Exception {
-        InputStream schemaStream = JSONSchemaValidatorUtility.class.getResourceAsStream(schemaPath);
+    private static JsonSchema getSchema(String schemaPath) throws Exception {
+        InputStream schemaStream = JsonSchemaValidatorTest.class.getResourceAsStream(schemaPath);
         JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7);
         return factory.getSchema(schemaStream);
     }
 
-    public static JsonNode getJsonNode(String jsonPath) throws Exception {
-        InputStream jsonStream = JSONSchemaValidatorUtility.class.getResourceAsStream(jsonPath);
+    private static JsonNode getJsonNode(String jsonPath) throws Exception {
+        InputStream jsonStream = JsonSchemaValidatorTest.class.getResourceAsStream(jsonPath);
+        ObjectMapper mapper = new ObjectMapper();
         return mapper.readTree(jsonStream);
     }
 
-    public static Set<ValidationMessage> validateJson(JsonSchema schema, JsonNode jsonNode) {
-        return schema.validate(jsonNode);
-    }
-
-    public static void printValidationMessages(Set<ValidationMessage> validationMessages) {
-        if (validationMessages.isEmpty()) {
-            System.out.println("Validation passed: No errors found.");
-        } else {
-            System.out.println("Validation failed with the following errors:");
-            Set<String> formattedMessages = validationMessages.stream()
+    private static Set<String> validateJson(JsonSchema schema, JsonNode jsonNode) {
+        Set<ValidationMessage> errors = schema.validate(jsonNode);
+        return errors.stream()
                 .map(error -> error.getMessage().replace("$.","").trim())
                 .collect(Collectors.toSet());
-            formattedMessages.forEach(error -> System.out.println("Validation error: " + error));
-        }
     }
 
-    public static void main(String[] args) throws Exception {
+    @Test
+    public void testValidAcceptedDecision() throws Exception {
         JsonSchema schema = getSchema("/schema.json");
+        JsonNode jsonNode = getJsonNode("/validAcceptedDecision.json");
 
-        JsonNode validAcceptedJson = getJsonNode("/validAcceptedDecision.json");
-        Set<ValidationMessage> errors = validateJson(schema, validAcceptedJson);
-        printValidationMessages(errors);
+        Set<String> errors = validateJson(schema, jsonNode);
+        assertTrue(errors.isEmpty(), "Expected no validation errors, but found: " + errors);
+    }
 
-        JsonNode validRejectedJson = getJsonNode("/validRejectedDecision.json");
-        errors = validateJson(schema, validRejectedJson);
-        printValidationMessages(errors);
+    @Test
+    public void testValidRejectedDecision() throws Exception {
+        JsonSchema schema = getSchema("/schema.json");
+        JsonNode jsonNode = getJsonNode("/validRejectedDecision.json");
 
-        JsonNode invalidAcceptedJson = getJsonNode("/invalidAcceptedDecision.json");
-        errors = validateJson(schema, invalidAcceptedJson);
-        printValidationMessages(errors);
+        Set<String> errors = validateJson(schema, jsonNode);
+        assertTrue(errors.isEmpty(), "Expected no validation errors, but found: " + errors);
+    }
 
-        JsonNode invalidRejectedJson = getJsonNode("/invalidRejectedDecision.json");
-        errors = validateJson(schema, invalidRejectedJson);
-        printValidationMessages(errors);
+    @Test
+    public void testInvalidAcceptedDecision() throws Exception {
+        JsonSchema schema = getSchema("/schema.json");
+        JsonNode jsonNode = getJsonNode("/invalidAcceptedDecision.json");
+
+        Set<String> errors = validateJson(schema, jsonNode);
+        assertFalse(errors.isEmpty(), "Expected validation errors, but found none");
+
+        // Assert specific error messages
+        assertTrue(errors.contains("RejectionCode: must be null"), "Expected error message about RejectionCode being null, but found: " + errors);
+        assertTrue(errors.contains("AdditionalComments: must be null"), "Expected error message about AdditionalComments being null, but found: " + errors);
+    }
+
+    @Test
+    public void testInvalidRejectedDecision() throws Exception {
+        JsonSchema schema = getSchema("/schema.json");
+        JsonNode jsonNode = getJsonNode("/invalidRejectedDecision.json");
+
+        Set<String> errors = validateJson(schema, jsonNode);
+        assertFalse(errors.isEmpty(), "Expected validation errors, but found none");
+
+        // Assert specific error messages
+        assertTrue(errors.contains("RejectionCode: required key [RejectionCode] not found"), "Expected error message about RejectionCode being missing, but found: " + errors);
+        assertTrue(errors.contains("AdditionalComments: required key [AdditionalComments] not found"), "Expected error message about AdditionalComments being missing, but found: " + errors);
     }
 }
-    
