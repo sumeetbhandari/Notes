@@ -62,3 +62,4 @@ public class JSONSchemaValidatorUtility {
         printValidationMessages(errors);
     }
 }
+    
