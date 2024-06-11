@@ -1,86 +1,166 @@
-Here's how you can write Java test cases using the `networknt/json-schema-validator` library for JSON schema validation, including assertions on validation messages. This example includes the Maven setup and test cases.
+If the schema is an array, you'll need to adjust the validation and the tests to handle an array of JSON objects. Here's how you can modify the utility class and the test cases to accommodate this scenario:
 
-### Maven Setup
+### Example Schema (Array of Objects)
 
-First, make sure your Maven `pom.xml` includes the necessary dependencies:
-
-```xml
-<properties>
-    <json.schema.validator.version>1.0.72</json.schema.validator.version>
-</properties>
-
-<dependencyManagement>
-    <dependencies>
-        <dependency>
-            <groupId>com.networknt</groupId>
-            <artifactId>json-schema-validator</artifactId>
-            <version>${json.schema.validator.version}</version>
-        </dependency>
-    </dependencies>
-</dependencyManagement>
-
-<dependencies>
-    <dependency>
-        <groupId>com.networknt</groupId>
-        <artifactId>json-schema-validator</artifactId>
-    </dependency>
-    <dependency>
-        <groupId>org.junit.jupiter</groupId>
-        <artifactId>junit-jupiter-api</artifactId>
-        <version>5.8.2</version>
-        <scope>test</scope>
-    </dependency>
-    <dependency>
-        <groupId>org.junit.jupiter</groupId>
-        <artifactId>junit-jupiter-engine</artifactId>
-        <version>5.8.2</version>
-        <scope>test</scope>
-    </dependency>
-</dependencies>
-```
-
-### JSON Schema
-
-Here's the JSON schema with custom error messages:
+Let's assume the schema defines an array of objects where each object follows the previously mentioned structure.
 
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
-  "properties": {
-    "Decision": {
-      "type": "string",
-      "enum": ["Accepted", "Rejected"],
-      "errorMessage": "Decision must be either 'Accepted' or 'Rejected'."
-    },
-    "RejectionCode": {
-      "type": "string",
-      "errorMessage": "RejectionCode is required when Decision is 'Rejected'."
-    },
-    "AdditionalComments": {
-      "type": "string",
-      "errorMessage": "AdditionalComments are required when Decision is 'Rejected'."
-    }
-  },
-  "required": ["Decision"],
-  "if": {
-    "properties": { "Decision": { "const": "Rejected" } }
-  },
-  "then": {
-    "required": ["RejectionCode", "AdditionalComments"]
-  },
-  "else": {
+  "type": "array",
+  "items": {
+    "type": "object",
     "properties": {
-      "RejectionCode": { "type": "null" },
-      "AdditionalComments": { "type": "null" }
-    }
+      "Decision": {
+        "type": "string",
+        "enum": ["Accepted", "Rejected"]
+      },
+      "RejectionCode": {
+        "type": "string"
+      },
+      "AdditionalComments": {
+        "type": "string"
+      }
+    },
+    "required": ["Decision"],
+    "allOf": [
+      {
+        "if": {
+          "properties": { "Decision": { "const": "Rejected" } }
+        },
+        "then": {
+          "required": ["RejectionCode", "AdditionalComments"]
+        },
+        "else": {
+          "properties": {
+            "RejectionCode": { "const": null },
+            "AdditionalComments": { "const": null }
+          }
+        }
+      }
+    ]
   }
 }
 ```
 
-### Java Test Cases
+### Updated Utility Class
 
-Here's a set of Java test cases using JUnit 5:
+#### JSONSchemaValidatorUtility.java
+
+```java
+package com.example.jsonvalidator;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.networknt.schema.JsonSchema;
+import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.SpecVersion;
+import com.networknt.schema.ValidationMessage;
+
+import java.io.InputStream;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+public class JSONSchemaValidatorUtility {
+
+    private static final ObjectMapper mapper = new ObjectMapper();
+
+    public static JsonSchema getSchema(String schemaPath) throws Exception {
+        InputStream schemaStream = JSONSchemaValidatorUtility.class.getResourceAsStream(schemaPath);
+        JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7);
+        return factory.getSchema(schemaStream);
+    }
+
+    public static JsonNode getJsonNode(String jsonPath) throws Exception {
+        InputStream jsonStream = JSONSchemaValidatorUtility.class.getResourceAsStream(jsonPath);
+        return mapper.readTree(jsonStream);
+    }
+
+    public static Set<ValidationMessage> validateJson(JsonSchema schema, JsonNode jsonNode) {
+        return schema.validate(jsonNode);
+    }
+
+    public static void printValidationMessages(Set<ValidationMessage> validationMessages) {
+        if (validationMessages.isEmpty()) {
+            System.out.println("Validation passed: No errors found.");
+        } else {
+            System.out.println("Validation failed with the following errors:");
+            Set<String> formattedMessages = validationMessages.stream()
+                .map(error -> error.getMessage().replace("$.","").trim())
+                .collect(Collectors.toSet());
+            formattedMessages.forEach(error -> System.out.println("Validation error: " + error));
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        JsonSchema schema = getSchema("/schema.json");
+
+        JsonNode validAcceptedJson = getJsonNode("/validAcceptedDecisionArray.json");
+        Set<ValidationMessage> errors = validateJson(schema, validAcceptedJson);
+        printValidationMessages(errors);
+
+        JsonNode validRejectedJson = getJsonNode("/validRejectedDecisionArray.json");
+        errors = validateJson(schema, validRejectedJson);
+        printValidationMessages(errors);
+
+        JsonNode invalidAcceptedJson = getJsonNode("/invalidAcceptedDecisionArray.json");
+        errors = validateJson(schema, invalidAcceptedJson);
+        printValidationMessages(errors);
+
+        JsonNode invalidRejectedJson = getJsonNode("/invalidRejectedDecisionArray.json");
+        errors = validateJson(schema, invalidRejectedJson);
+        printValidationMessages(errors);
+    }
+}
+```
+
+### Example JSON Files
+
+**validAcceptedDecisionArray.json**:
+```json
+[
+  {
+    "Decision": "Accepted",
+    "RejectionCode": null,
+    "AdditionalComments": null
+  }
+]
+```
+
+**validRejectedDecisionArray.json**:
+```json
+[
+  {
+    "Decision": "Rejected",
+    "RejectionCode": "RC001",
+    "AdditionalComments": "Some comments"
+  }
+]
+```
+
+**invalidAcceptedDecisionArray.json**:
+```json
+[
+  {
+    "Decision": "Accepted",
+    "RejectionCode": "RC001",
+    "AdditionalComments": "Some comments"
+  }
+]
+```
+
+**invalidRejectedDecisionArray.json**:
+```json
+[
+  {
+    "Decision": "Rejected"
+  }
+]
+```
+
+### Updated JUnit Test Cases
+
+#### JsonSchemaValidatorTest.java
 
 ```java
 import com.networknt.schema.JsonSchema;
@@ -93,106 +173,84 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.InputStream;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class JsonSchemaValidatorTest {
 
-    private JsonSchema getSchema(String schemaPath) throws Exception {
-        InputStream schemaStream = getClass().getResourceAsStream(schemaPath);
+    private static JsonSchema getSchema(String schemaPath) throws Exception {
+        InputStream schemaStream = JsonSchemaValidatorTest.class.getResourceAsStream(schemaPath);
         JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7);
         return factory.getSchema(schemaStream);
     }
 
-    private JsonNode getJsonNode(String jsonPath) throws Exception {
-        InputStream jsonStream = getClass().getResourceAsStream(jsonPath);
+    private static JsonNode getJsonNode(String jsonPath) throws Exception {
+        InputStream jsonStream = JsonSchemaValidatorTest.class.getResourceAsStream(jsonPath);
         ObjectMapper mapper = new ObjectMapper();
         return mapper.readTree(jsonStream);
+    }
+
+    private static Set<String> validateJson(JsonSchema schema, JsonNode jsonNode) {
+        Set<ValidationMessage> errors = schema.validate(jsonNode);
+        return errors.stream()
+                .map(error -> error.getMessage().replace("$.","").trim())
+                .collect(Collectors.toSet());
     }
 
     @Test
     public void testValidAcceptedDecision() throws Exception {
         JsonSchema schema = getSchema("/schema.json");
-        JsonNode jsonNode = getJsonNode("/validAcceptedDecision.json");
+        JsonNode jsonNode = getJsonNode("/validAcceptedDecisionArray.json");
 
-        Set<ValidationMessage> errors = schema.validate(jsonNode);
+        Set<String> errors = validateJson(schema, jsonNode);
         assertTrue(errors.isEmpty(), "Expected no validation errors, but found: " + errors);
     }
 
     @Test
     public void testValidRejectedDecision() throws Exception {
         JsonSchema schema = getSchema("/schema.json");
-        JsonNode jsonNode = getJsonNode("/validRejectedDecision.json");
+        JsonNode jsonNode = getJsonNode("/validRejectedDecisionArray.json");
 
-        Set<ValidationMessage> errors = schema.validate(jsonNode);
+        Set<String> errors = validateJson(schema, jsonNode);
         assertTrue(errors.isEmpty(), "Expected no validation errors, but found: " + errors);
     }
 
     @Test
     public void testInvalidAcceptedDecision() throws Exception {
         JsonSchema schema = getSchema("/schema.json");
-        JsonNode jsonNode = getJsonNode("/invalidAcceptedDecision.json");
+        JsonNode jsonNode = getJsonNode("/invalidAcceptedDecisionArray.json");
 
-        Set<ValidationMessage> errors = schema.validate(jsonNode);
+        Set<String> errors = validateJson(schema, jsonNode);
         assertFalse(errors.isEmpty(), "Expected validation errors, but found none");
-        errors.forEach(error -> System.out.println("Validation error: " + error.getMessage()));
+
+        // Assert specific error messages
+        assertTrue(errors.contains("RejectionCode: must be null"), "Expected error message about RejectionCode being null, but found: " + errors);
+        assertTrue(errors.contains("AdditionalComments: must be null"), "Expected error message about AdditionalComments being null, but found: " + errors);
     }
 
     @Test
     public void testInvalidRejectedDecision() throws Exception {
         JsonSchema schema = getSchema("/schema.json");
-        JsonNode jsonNode = getJsonNode("/invalidRejectedDecision.json");
+        JsonNode jsonNode = getJsonNode("/invalidRejectedDecisionArray.json");
 
-        Set<ValidationMessage> errors = schema.validate(jsonNode);
+        Set<String> errors = validateJson(schema, jsonNode);
         assertFalse(errors.isEmpty(), "Expected validation errors, but found none");
-        errors.forEach(error -> System.out.println("Validation error: " + error.getMessage()));
+
+        // Assert specific error messages
+        assertTrue(errors.contains("RejectionCode: required key [RejectionCode] not found"), "Expected error message about RejectionCode being missing, but found: " + errors);
+        assertTrue(errors.contains("AdditionalComments: required key [AdditionalComments] not found"), "Expected error message about AdditionalComments being missing, but found: " + errors);
     }
-}
-```
-
-### Example JSON Files
-
-Place these JSON files in the `resources` directory:
-
-**validAcceptedDecision.json**:
-```json
-{
-  "Decision": "Accepted",
-  "RejectionCode": null,
-  "AdditionalComments": null
-}
-```
-
-**validRejectedDecision.json**:
-```json
-{
-  "Decision": "Rejected",
-  "RejectionCode": "RC001",
-  "AdditionalComments": "Some comments"
-}
-```
-
-**invalidAcceptedDecision.json**:
-```json
-{
-  "Decision": "Accepted",
-  "RejectionCode": "RC001",
-  "AdditionalComments": "Some comments"
-}
-```
-
-**invalidRejectedDecision.json**:
-```json
-{
-  "Decision": "Rejected"
 }
 ```
 
 ### Explanation
 
-1. **Setup and Dependencies**: The `pom.xml` file includes the necessary dependencies for JSON schema validation and JUnit 5 for testing.
-2. **Schema with Custom Error Messages**: The JSON schema is defined with custom error messages for different properties and conditions.
-3. **Java Test Cases**: The test cases load the schema and JSON files, perform validation, and assert the results, printing validation messages for errors.
+1. **Utility Class**: Updated to validate an array of JSON objects.
+2. **JSON Files**: Adjusted to contain arrays of JSON objects.
+3. **JUnit Test Cases**: 
+   - Ensure the validation handles arrays of objects.
+   - Specific assertions for error messages are updated accordingly.
 
-These tests ensure that the schema validation behaves as expected, and the custom error messages provide clear feedback on validation failures.
+This setup will allow you to validate JSON arrays against the schema and handle validation messages appropriately.
