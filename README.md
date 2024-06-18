@@ -1,167 +1,153 @@
-package com.example.jsonvalidator;
+To create a JSON file and its equivalent JSON schema file from the provided JSON string, we need to ensure that the JSON schema accurately enforces the rules given in the JSON string.
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.networknt.schema.JsonSchema;
-import com.networknt.schema.JsonSchemaFactory;
-import com.networknt.schema.SpecVersion;
-import com.networknt.schema.ValidationMessage;
+### JSON String
 
-import java.util.Set;
-import java.util.stream.Collectors;
+Here is the JSON string provided:
 
-public class JSONSchemaValidatorUtility {
-
-    private static final ObjectMapper mapper = new ObjectMapper();
-
-    public static JsonSchema getSchemaFromString(String schemaString) throws Exception {
-        JsonNode schemaNode = mapper.readTree(schemaString);
-        JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7);
-        return factory.getSchema(schemaNode);
+```json
+{
+  "output": [
+    {
+      "payload": {
+        "decision": "Rejected",
+        "reasonForRejection": "no reason",
+        "additionalComments": "ss",
+        "widgetId": ""
+      },
+      "actorIdentifier": "e3f9248b-1609-441a-9a98-955b4c25c93d",
+      "actorFullName": "Manish Bansal",
+      "actionTimeStamp": "2024-06-04 11:32:16"
     }
+  ]
+}
+```
 
-    public static JsonNode getJsonNodeFromString(String jsonString) throws Exception {
-        return mapper.readTree(jsonString);
+### Equivalent JSON Schema
+
+Here is the JSON schema that enforces the rules for the above JSON string:
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "output": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "payload": {
+            "type": "object",
+            "properties": {
+              "decision": { "type": "string" },
+              "reasonForRejection": { "type": "string" },
+              "additionalComments": { "type": "string" },
+              "widgetId": { "type": "string" }
+            },
+            "required": ["decision", "reasonForRejection", "additionalComments", "widgetId"]
+          },
+          "actorIdentifier": { "type": "string", "format": "uuid" },
+          "actorFullName": { "type": "string" },
+          "actionTimeStamp": { "type": "string", "format": "date-time" }
+        },
+        "required": ["payload", "actorIdentifier", "actorFullName", "actionTimeStamp"]
+      }
     }
+  },
+  "required": ["output"]
+}
+```
 
-    public static Set<ValidationMessage> validateJson(JsonSchema schema, JsonNode jsonNode) {
-        return schema.validate(jsonNode);
-    }
+### Writing to Files
 
-    public static void printValidationMessages(Set<ValidationMessage> validationMessages) {
-        if (validationMessages.isEmpty()) {
-            System.out.println("Validation passed: No errors found.");
-        } else {
-            System.out.println("Validation failed with the following errors:");
-            Set<String> formattedMessages = validationMessages.stream()
-                .map(error -> error.getMessage().replace("$.","").trim())
-                .collect(Collectors.toSet());
-            formattedMessages.forEach(error -> System.out.println("Validation error: " + error));
+We will write these to their respective files: `input.json` and `schema.json`.
+
+#### Java Code to Write Files
+
+Here is the Java code that writes these contents to files:
+
+```java
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+
+public class WriteFiles {
+
+    public static void main(String[] args) {
+        String jsonContent = "{\n" +
+                "  \"output\": [\n" +
+                "    {\n" +
+                "      \"payload\": {\n" +
+                "        \"decision\": \"Rejected\",\n" +
+                "        \"reasonForRejection\": \"no reason\",\n" +
+                "        \"additionalComments\": \"ss\",\n" +
+                "        \"widgetId\": \"\"\n" +
+                "      },\n" +
+                "      \"actorIdentifier\": \"e3f9248b-1609-441a-9a98-955b4c25c93d\",\n" +
+                "      \"actorFullName\": \"Manish Bansal\",\n" +
+                "      \"actionTimeStamp\": \"2024-06-04 11:32:16\"\n" +
+                "    }\n" +
+                "  ]\n" +
+                "}";
+
+        String schemaContent = "{\n" +
+                "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+                "  \"type\": \"object\",\n" +
+                "  \"properties\": {\n" +
+                "    \"output\": {\n" +
+                "      \"type\": \"array\",\n" +
+                "      \"items\": {\n" +
+                "        \"type\": \"object\",\n" +
+                "        \"properties\": {\n" +
+                "          \"payload\": {\n" +
+                "            \"type\": \"object\",\n" +
+                "            \"properties\": {\n" +
+                "              \"decision\": { \"type\": \"string\" },\n" +
+                "              \"reasonForRejection\": { \"type\": \"string\" },\n" +
+                "              \"additionalComments\": { \"type\": \"string\" },\n" +
+                "              \"widgetId\": { \"type\": \"string\" }\n" +
+                "            },\n" +
+                "            \"required\": [\"decision\", \"reasonForRejection\", \"additionalComments\", \"widgetId\"]\n" +
+                "          },\n" +
+                "          \"actorIdentifier\": { \"type\": \"string\", \"format\": \"uuid\" },\n" +
+                "          \"actorFullName\": { \"type\": \"string\" },\n" +
+                "          \"actionTimeStamp\": { \"type\": \"string\", \"format\": \"date-time\" }\n" +
+                "        },\n" +
+                "        \"required\": [\"payload\", \"actorIdentifier\", \"actorFullName\", \"actionTimeStamp\"]\n" +
+                "      }\n" +
+                "    }\n" +
+                "  },\n" +
+                "  \"required\": [\"output\"]\n" +
+                "}";
+
+        try {
+            writeToFile("input.json", jsonContent);
+            writeToFile("schema.json", schemaContent);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
-    public static void main(String[] args) throws Exception {
-        String schemaString = "{\n" +
-                "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
-                "  \"type\": \"array\",\n" +
-                "  \"items\": {\n" +
-                "    \"type\": \"object\",\n" +
-                "    \"properties\": {\n" +
-                "      \"Decision\": {\n" +
-                "        \"type\": \"string\",\n" +
-                "        \"enum\": [\"Accepted\", \"Rejected\"]\n" +
-                "      },\n" +
-                "      \"RejectionCode\": {\n" +
-                "        \"type\": \"string\",\n" +
-                "        \"nullable\": true\n" +
-                "      },\n" +
-                "      \"AdditionalComments\": {\n" +
-                "        \"type\": \"string\",\n" +
-                "        \"nullable\": true\n" +
-                "      }\n" +
-                "    },\n" +
-                "    \"required\": [\"Decision\"],\n" +
-                "    \"allOf\": [\n" +
-                "      {\n" +
-                "        \"if\": {\n" +
-                "          \"properties\": { \"Decision\": { \"const\": \"Rejected\" } }\n" +
-                "        },\n" +
-                "        \"then\": {\n" +
-                "          \"required\": [\"RejectionCode\", \"AdditionalComments\"]\n" +
-                "        },\n" +
-                "        \"else\": {\n" +
-                "          \"properties\": {\n" +
-                "            \"RejectionCode\": { \"const\": null },\n" +
-                "            \"AdditionalComments\": { \"const\": null }\n" +
-                "          }\n" +
-                "        }\n" +
-                "      }\n" +
-                "    ]\n" +
-                "  }\n" +
-                "}";
-
-        String jsonString = "[\n" +
-                "  {\n" +
-                "    \"Decision\": \"Accepted\",\n" +
-                "    \"RejectionCode\": null,\n" +
-                "    \"AdditionalComments\": null\n" +
-                "  },\n" +
-                "  {\n" +
-                "    \"Decision\": \"Rejected\"\n" +
-                "  }\n" +
-                "]";
-
-        JsonSchema schema = getSchemaFromString(schemaString);
-        JsonNode jsonNode = getJsonNodeFromString(jsonString);
-        Set<ValidationMessage> errors = validateJson(schema, jsonNode);
-        printValidationMessages(errors);
+    private static void writeToFile(String fileName, String content) throws IOException {
+        File file = new File(fileName);
+        try (FileWriter fileWriter = new FileWriter(file)) {
+            fileWriter.write(content);
+        }
     }
 }
+```
 
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
+### Running the Code
 
-    <groupId>com.example</groupId>
-    <artifactId>json-schema-validator</artifactId>
-    <version>1.0-SNAPSHOT</version>
+1. **Compile and run `WriteFiles.java`** to create `input.json` and `schema.json`.
+2. **Use these files for validation** with your `JSONSchemaValidatorUtility` class.
 
-    <properties>
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <maven.compiler.target>1.8</maven.compiler.target>
-        <jackson.version>2.13.4</jackson.version>
-        <networknt.json.schema.validator.version>1.0.73</networknt.json.schema.validator.version>
-        <junit.version>5.8.2</junit.version>
-    </properties>
+### Expected Output
 
-    <dependencies>
-        <!-- Jackson Databind for JSON processing -->
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
-            <version>${jackson.version}</version>
-        </dependency>
+Running the utility class with the provided schema and JSON data should produce the following output if the data and schema match perfectly:
 
-        <!-- Networknt JSON Schema Validator -->
-        <dependency>
-            <groupId>com.networknt</groupId>
-            <artifactId>json-schema-validator</artifactId>
-            <version>${networknt.json.schema.validator.version}</version>
-        </dependency>
+```plaintext
+Validation passed: No errors found.
+```
 
-        <!-- JUnit for testing -->
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-api</artifactId>
-            <version>${junit.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
-            <version>${junit.version}</version>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.8.1</version>
-                <configuration>
-                    <source>${maven.compiler.source}</source>
-                    <target>${maven.compiler.target}</target>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>2.22.2</version>
-            </plugin>
-        </plugins>
-    </build>
-</project>
-
+If there are discrepancies or missing required fields, it will print the specific validation errors.
